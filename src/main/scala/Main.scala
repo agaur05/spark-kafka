@@ -140,7 +140,7 @@ object Main {
     * - start_timestamp - Timestamp (start of week)
     * - end_timestamp - Timestamp (end of week)
     * - max_pm - Double - the maximum particulate matter reading during the week
-    * - mean_temp - Double - the mean temperature during the week
+    * - mean_temp - Double - the mean temperature during the week (Round this using round() function)
     *
     * @param df the input dataframe
     * @return the resulting dataframe
