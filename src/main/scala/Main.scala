@@ -1,5 +1,8 @@
+import com.typesafe.config.{Config, ConfigFactory}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.streaming.{DataStreamWriter, Trigger}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
 /**
   * The goal of this exercise is to develop a structured streaming spark application
@@ -48,6 +51,56 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
   *
   */
 object Main {
+
+  def main(args: Array[String]): Unit = {
+    // Load application configuration
+    val config = ConfigFactory.load()
+
+    // Configure Spark
+    val sparkConf: SparkConf = new SparkConf()
+      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+
+    // Create Spark context
+    val spark: SparkSession = SparkSession.builder.config(sparkConf).getOrCreate()
+
+    // Create DAG, start it and wait for it to stop
+    val dag = createDAG(spark, config)
+    val query = dag.trigger(Trigger.ProcessingTime("1 hour")).start()
+    query.awaitTermination()
+  }
+
+  /**
+    * Create Structured Streaming DAG
+    *
+    * @param spark the spark session
+    * @param config the application configuration
+    * @return the data stream writer
+    */
+  def createDAG(spark: SparkSession, config: Config): DataStreamWriter[Row] = {
+    val kafkaData = ingestKafkaTopic(
+      spark,
+      config.getString("bootstrap"),
+      config.getString("topic"),
+      config.getString("startingOffsets"),
+      config.getLong("maxOffsets")
+    )
+    val extractedValues = extractValues(kafkaData)
+    val topEvents = calculateTopPollutionEventsPerWeek(extractedValues)
+    writeEventsToHive(topEvents, config.getString("outputPath"))
+  }
+
+  /**
+    * Write Top Weekly Events to Hive
+    *
+    * @param events the events dataframe
+    * @return the data stream writer
+    */
+  def writeEventsToHive(events: DataFrame, outputPath: String): DataStreamWriter[Row] = {
+    events.writeStream
+      .outputMode("append")
+      .format("parquet")
+      .option("path", outputPath)
+  }
 
   /**
     * Ingest Kafka Topic with PM data
@@ -146,7 +199,7 @@ object Main {
     * @return the resulting dataframe
     */
   def calculateTopPollutionEventsPerWeek(df: DataFrame): DataFrame = {
-    df.withWatermark("timestamp", "2 weeks")
+    df.withWatermark("timestamp", "8 days")
       .groupBy(col("source"), window(col("timestamp"), "1 week", "1 week"))
       .agg(
         max("pm").as("max_pm"),

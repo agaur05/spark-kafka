@@ -12,10 +12,10 @@ import org.scalatest.time.SpanSugar._
 class MainTest extends FlatSpec with Eventually with TestEnvironment {
 
   // Kafka Topic Name with PM data
-  val topic: String = "pm"
+  private val topic: String = "pm"
 
   // Kafka bootstrap server
-  var bootstrap: String = _
+  private var bootstrap: String = _
 
   // We load all data into Kafka once
   // It can then be used by all test cases
@@ -91,7 +91,6 @@ class MainTest extends FlatSpec with Eventually with TestEnvironment {
     // Wait for stream to process records and verify content of in-memory table
     eventually(timeout(30 seconds), interval(10 seconds)) {
       val rows = spark.table("kafka_output").collect()
-      rows.foreach(println)
       assert(rows.length == 1)
       assert(rows(0).getAs[String]("key") == "BeijingPM20100101_20151231.csv")
       assert(rows(0).getAs[String]("value") == "2010,1,1,0,4,null,-21.0,43.0,1021.0,-11.0,NW,1.79,0.0,0.0")
@@ -127,7 +126,6 @@ class MainTest extends FlatSpec with Eventually with TestEnvironment {
     )
     val df = spark.createDataFrame(rdd, schema)
     val row = Main.extractValues(df).head()
-    println(row)
     assert(row.getAs[String]("source") == "BeijingPM20100101_20151231.csv")
     assert(row.getAs[Double]("pm") == 129d)
     assert(row.getAs[Double]("temp") == 0.89d)
@@ -167,7 +165,6 @@ class MainTest extends FlatSpec with Eventually with TestEnvironment {
     // Wait for stream to process records and verify content of in-memory table
     eventually(timeout(60 seconds), interval(10 seconds)) {
       val rows = spark.table("pm_aggs").sort(col("max_pm").desc).limit(5).collect()
-      rows.foreach(println)
       assert(rows.length == 5)
       assert(rows(0).getAs[String]("source") == "BeijingPM20100101_20151231.csv")
       assert(rows(0).getAs[Double]("max_pm") == 994d)
